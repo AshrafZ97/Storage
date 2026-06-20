@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>إدارة المخزن</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f0f4f8; color: #1e293b; min-height: 100vh; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #1e40af, #3b82f6); color: #fff; padding: 24px 20px 20px; }
+  .header-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .header h1 { font-size: 22px; font-weight: 800; }
+  .header p { font-size: 13px; opacity: 0.85; margin-top: 3px; }
+  .btn-add { background: #fff; color: #1e40af; border: none; border-radius: 10px; padding: 10px 18px; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 18px; }
+  .stat-card { background: rgba(255,255,255,0.15); border-radius: 12px; padding: 12px 14px; border: 1px solid rgba(255,255,255,0.2); }
+  .stat-card.warn { background: rgba(251,191,36,0.2); border-color: rgba(251,191,36,0.5); }
+  .stat-icon { font-size: 18px; }
+  .stat-val { font-size: 20px; font-weight: 800; margin: 4px 0 2px; }
+  .stat-label { font-size: 12px; opacity: 0.85; }
+
+  /* Filters */
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; padding: 16px; }
+  .filters input, .filters select {
+    flex: 1 1 140px; padding: 10px 12px; border-radius: 10px;
+    border: 1.5px solid #e2e8f0; font-size: 14px; background: #fff; outline: none;
+    font-family: inherit;
+  }
+
+  /* Cards for mobile */
+  .products-list { padding: 0 16px 40px; display: flex; flex-direction: column; gap: 10px; }
+  .product-card { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .card-name { font-weight: 700; font-size: 16px; }
+  .card-cat { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+  .badge { border-radius: 20px; padding: 3px 10px; font-weight: 600; font-size: 12px; white-space: nowrap; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .card-field { background: #f8fafc; border-radius: 8px; padding: 8px 10px; }
+  .card-field-label { font-size: 11px; color: #94a3b8; margin-bottom: 2px; }
+  .card-field-val { font-weight: 700; font-size: 14px; }
+  .card-actions { display: flex; gap: 8px; }
+  .btn-sarf { background: #fef3c7; color: #92400e; border: none; border-radius: 8px; padding: 8px 14px; font-weight: 600; font-size: 13px; cursor: pointer; flex: 1; font-family: inherit; }
+  .btn-sarf:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+  .btn-edit { background: #eff6ff; color: #1e40af; border: none; border-radius: 8px; padding: 8px 12px; font-size: 15px; cursor: pointer; }
+  .btn-del { background: #fee2e2; color: #ef4444; border: none; border-radius: 8px; padding: 8px 12px; font-size: 15px; cursor: pointer; }
+
+  /* Modal */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 900; align-items: flex-end; justify-content: center; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 20px 20px 0 0; padding: 24px 20px 32px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { font-size: 18px; font-weight: 800; margin-bottom: 18px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-weight: 600; font-size: 13px; color: #374151; margin-bottom: 6px; }
+  .field input, .field select {
+    width: 100%; padding: 11px 14px; border-radius: 10px;
+    border: 1.5px solid #e2e8f0; font-size: 15px; outline: none;
+    background: #f8fafc; font-family: inherit;
+  }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-primary { background: #1e40af; color: #fff; border: none; border-radius: 10px; padding: 12px 20px; font-weight: 700; font-size: 15px; cursor: pointer; flex: 1; font-family: inherit; }
+  .btn-secondary { background: #f1f5f9; color: #374151; border: none; border-radius: 10px; padding: 12px 16px; font-weight: 600; font-size: 15px; cursor: pointer; font-family: inherit; }
+  .btn-confirm { background: #f59e0b; color: #fff; border: none; border-radius: 10px; padding: 12px 20px; font-weight: 700; font-size: 15px; cursor: pointer; flex: 1; font-family: inherit; }
+  .btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Info box */
+  .info-box { background: #f8fafc; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 14px; }
+  .info-row:last-child { margin-bottom: 0; }
+  .total-box { background: #eff6ff; border-radius: 10px; padding: 12px; text-align: center; margin-top: 10px; font-size: 14px; color: #64748b; }
+  .total-box strong { color: #1e40af; font-size: 17px; }
+  .error-box { background: #fee2e2; border-radius: 10px; padding: 10px; text-align: center; color: #ef4444; font-size: 13px; margin-top: 8px; }
+
+  /* Toast */
+  .toast { display: none; position: fixed; top: 16px; right: 16px; left: 16px; z-index: 9999; background: #10b981; color: #fff; padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); text-align: center; }
+  .toast.error { background: #ef4444; }
+  .toast.show { display: block; }
+
+  .empty { text-align: center; color: #94a3b8; padding: 40px; font-size: 15px; }
+
+  /* Connection badge */
+  .conn-badge { display:inline-flex; align-items:center; gap:6px; font-size:11px; background:rgba(255,255,255,0.18); border-radius:20px; padding:4px 10px; margin-top:8px; }
+  .conn-dot { width:7px; height:7px; border-radius:50%; background:#fbbf24; }
+  .conn-dot.ok { background:#22c55e; }
+  .conn-dot.err { background:#ef4444; }
+</style>
+</head>
+<body>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-top">
+    <div>
+      <h1>📦 إدارة المخزن</h1>
+      <p>تتبع منتجاتك بسهولة • يُحفظ مباشرة على قاعدة البيانات ☁️</p>
+      <div class="conn-badge"><span class="conn-dot" id="conn-dot"></span><span id="conn-text">جاري الاتصال بقاعدة البيانات...</span></div>
+    </div>
+    <button class="btn-add" onclick="openAdd()">+ إضافة منتج</button>
+  </div>
+  <div class="stats">
+    <div class="stat-card" id="stat-total">
+      <div class="stat-icon">🗂️</div>
+      <div class="stat-val" id="s-total">0</div>
+      <div class="stat-label">إجمالي المنتجات</div>
+    </div>
+    <div class="stat-card" id="stat-value">
+      <div class="stat-icon">💰</div>
+      <div class="stat-val" id="s-value">₪0</div>
+      <div class="stat-label">قيمة المخزن</div>
+    </div>
+    <div class="stat-card" id="stat-low">
+      <div class="stat-icon">⚠️</div>
+      <div class="stat-val" id="s-low">0</div>
+      <div class="stat-label">مخزون منخفض</div>
+    </div>
+    <div class="stat-card" id="stat-out">
+      <div class="stat-icon">🚫</div>
+      <div class="stat-val" id="s-out">0</div>
+      <div class="stat-label">نفد من المخزن</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filters">
+  <input type="text" id="search" placeholder="🔍 ابحث عن منتج..." oninput="render()">
+  <select id="filterCat" onchange="render()">
+    <option value="الكل">الكل</option>
+    <option>مشروبات</option>
+    <option>مواد غذائية</option>
+    <option>منظفات</option>
+    <option>إلكترونيات</option>
+    <option>أخرى</option>
+  </select>
+</div>
+
+<!-- Products -->
+<div class="products-list" id="products-list"></div>
+
+<!-- Modal Add/Edit -->
+<div class="overlay" id="modal-form">
+  <div class="modal">
+    <h2 id="modal-title">➕ إضافة منتج جديد</h2>
+    <div class="field">
+      <label>اسم المنتج *</label>
+      <input type="text" id="f-name" placeholder="مثال: قهوة عربية">
+    </div>
+    <div class="field">
+      <label>الفئة</label>
+      <select id="f-cat">
+        <option>مشروبات</option>
+        <option>مواد غذائية</option>
+        <option>منظفات</option>
+        <option>إلكترونيات</option>
+        <option>أخرى</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>السعر (₪) *</label>
+        <input type="number" id="f-price" min="0" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>الكمية *</label>
+        <input type="number" id="f-qty" min="0" placeholder="0">
+      </div>
+    </div>
+    <div class="field">
+      <label>الحد الأدنى للتنبيه</label>
+      <input type="number" id="f-min" min="0" placeholder="0">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-form')">إلغاء</button>
+      <button class="btn-primary" id="btn-save" onclick="saveProduct()">إضافة</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Out -->
+<div class="overlay" id="modal-out">
+  <div class="modal">
+    <h2>📤 صرف من المخزن</h2>
+    <p style="color:#64748b;margin-bottom:16px;font-size:14px">المنتج: <strong id="out-name"></strong></p>
+    <div class="info-box">
+      <div class="info-row"><span style="color:#64748b">الكمية المتوفرة:</span><strong id="out-avail"></strong></div>
+      <div class="info-row"><span style="color:#64748b">سعر الوحدة:</span><strong style="color:#1e40af" id="out-price"></strong></div>
+    </div>
+    <div class="field">
+      <label>الكمية المصروفة</label>
+      <input type="number" id="out-qty" min="1" oninput="updateOutTotal()" style="text-align:center;font-size:20px;font-weight:700">
+    </div>
+    <div id="out-total-box" class="total-box" style="display:none">
+      إجمالي قيمة المصروف: <strong id="out-total"></strong>
+    </div>
+    <div id="out-error" class="error-box" style="display:none">الكمية المطلوبة أكثر من المتوفر!</div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-out')">إلغاء</button>
+      <button class="btn-confirm" id="btn-confirm-out" onclick="confirmOut()">تأكيد الصرف</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (نسخة compat: سكربتات عادية بدون type="module" حتى تعمل على المتصفحات وعند فتح الملف مباشرة بدون سيرفر) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script>
+// ===== Firebase Init =====
+const firebaseConfig = {
+  apiKey: "AIzaSyCEdTULqCfNXs-3tOUNgmQqbvWYx-tDrcg",
+  authDomain: "storage-4379e.firebaseapp.com",
+  projectId: "storage-4379e",
+  storageBucket: "storage-4379e.firebasestorage.app",
+  messagingSenderId: "774835038075",
+  appId: "1:774835038075:web:1de383648a6c2f458f7fde",
+  measurementId: "G-4VL3DBEW14"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+// كل بيانات المخزن محفوظة داخل وثيقة واحدة في Firestore، وتتزامن لحظياً بين كل من يفتح الصفحة
+const inventoryRef = db.collection("inventory").doc("main");
+
+// ===== App State =====
+const INITIAL = [
+  { id: 1, name: "قهوة عربية", category: "مشروبات", price: 18, quantity: 120, minStock: 20 },
+  { id: 2, name: "شاي أخضر", category: "مشروبات", price: 12, quantity: 8, minStock: 15 },
+  { id: 3, name: "بسكويت شوكولاتة", category: "مواد غذائية", price: 7, quantity: 200, minStock: 50 },
+];
+
+let products = [];
+let nextId = 4;
+let editingId = null;
+let outProduct = null;
+let dataLoaded = false;
+
+function setConn(state, text) {
+  const dot = document.getElementById("conn-dot");
+  const label = document.getElementById("conn-text");
+  dot.className = "conn-dot" + (state ? " " + state : "");
+  label.textContent = text;
+}
+
+// الاستماع المباشر لقاعدة البيانات: أي تغيير ينعكس فوراً على كل من يفتح الصفحة
+inventoryRef.onSnapshot(async (snap) => {
+  if (snap.exists) {
+    const data = snap.data();
+    products = data.products || [];
+    nextId = data.nextId || 1;
+  } else {
+    // أول مرة يتم تشغيل التطبيق: ننشئ الوثيقة بالبيانات الافتراضية
+    products = INITIAL;
+    nextId = 4;
+    try {
+      await inventoryRef.set({ products, nextId });
+    } catch (e) {
+      console.error(e);
+      setConn("err", "فشل الاتصال بقاعدة البيانات");
+      showToast("فشل الاتصال بقاعدة البيانات ✗", "error");
+      return;
+    }
+  }
+  dataLoaded = true;
+  setConn("ok", "متصل بقاعدة البيانات");
+  render();
+}, (error) => {
+  console.error(error);
+  setConn("err", "فشل الاتصال بقاعدة البيانات");
+  showToast("فشل الاتصال بقاعدة البيانات ✗", "error");
+});
+
+async function save() {
+  try {
+    await inventoryRef.set({ products, nextId });
+  } catch (e) {
+    console.error(e);
+    showToast("فشل حفظ التغييرات ✗", "error");
+  }
+}
+
+function fmt(n) { return "₪" + Number(n).toLocaleString("en"); }
+
+function stockStatus(p) {
+  if (p.quantity === 0) return { label: "نفد", color: "#ef4444", bg: "#fee2e2" };
+  if (p.quantity <= p.minStock) return { label: "منخفض", color: "#f59e0b", bg: "#fef3c7" };
+  return { label: "متوفر", color: "#10b981", bg: "#d1fae5" };
+}
+
+function render() {
+  const list = document.getElementById("products-list");
+
+  if (!dataLoaded) {
+    list.innerHTML = '<div class="empty">⏳ جاري تحميل البيانات من قاعدة البيانات...</div>';
+    return;
+  }
+
+  const search = document.getElementById("search").value;
+  const cat = document.getElementById("filterCat").value;
+
+  const filtered = products.filter(p => {
+    const ms = p.name.includes(search) || p.category.includes(search);
+    const mc = cat === "الكل" || p.category === cat;
+    return ms && mc;
+  });
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty">لا توجد منتجات</div>';
+  } else {
+    list.innerHTML = filtered.map(p => {
+      const st = stockStatus(p);
+      return `
+      <div class="product-card">
+        <div class="card-top">
+          <div>
+            <div class="card-name">${p.name}</div>
+            <div class="card-cat">${p.category}</div>
+          </div>
+          <span class="badge" style="background:${st.bg};color:${st.color}">${st.label}</span>
+        </div>
+        <div class="card-grid">
+          <div class="card-field">
+            <div class="card-field-label">السعر</div>
+            <div class="card-field-val" style="color:#1e40af">${fmt(p.price)}</div>
+          </div>
+          <div class="card-field">
+            <div class="card-field-label">الكمية</div>
+            <div class="card-field-val" style="color:${p.quantity <= p.minStock ? '#ef4444' : '#1e293b'}">${p.quantity}</div>
+          </div>
+          <div class="card-field">
+            <div class="card-field-label">الإجمالي</div>
+            <div class="card-field-val" style="color:#059669;font-size:12px">${fmt(p.price * p.quantity)}</div>
+          </div>
+        </div>
+        <div class="card-actions">
+          <button class="btn-sarf" onclick="openOut(${p.id})" ${p.quantity === 0 ? 'disabled' : ''}>📤 صرف</button>
+          <button class="btn-edit" onclick="openEdit(${p.id})">✏️</button>
+          <button class="btn-del" onclick="removeProduct(${p.id})">🗑️</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  // Stats
+  const totalVal = products.reduce((s, p) => s + p.price * p.quantity, 0);
+  const low = products.filter(p => p.quantity <= p.minStock && p.quantity > 0).length;
+  const out = products.filter(p => p.quantity === 0).length;
+  document.getElementById("s-total").textContent = products.length;
+  document.getElementById("s-value").textContent = fmt(totalVal);
+  document.getElementById("s-low").textContent = low;
+  document.getElementById("s-out").textContent = out;
+  document.getElementById("stat-low").className = "stat-card" + (low > 0 ? " warn" : "");
+  document.getElementById("stat-out").className = "stat-card" + (out > 0 ? " warn" : "");
+}
+
+function openAdd() {
+  editingId = null;
+  document.getElementById("modal-title").textContent = "➕ إضافة منتج جديد";
+  document.getElementById("btn-save").textContent = "إضافة";
+  document.getElementById("f-name").value = "";
+  document.getElementById("f-cat").value = "مشروبات";
+  document.getElementById("f-price").value = "";
+  document.getElementById("f-qty").value = "";
+  document.getElementById("f-min").value = "";
+  document.getElementById("modal-form").classList.add("open");
+}
+
+function openEdit(id) {
+  const p = products.find(x => x.id === id);
+  editingId = id;
+  document.getElementById("modal-title").textContent = "✏️ تعديل المنتج";
+  document.getElementById("btn-save").textContent = "حفظ التعديلات";
+  document.getElementById("f-name").value = p.name;
+  document.getElementById("f-cat").value = p.category;
+  document.getElementById("f-price").value = p.price;
+  document.getElementById("f-qty").value = p.quantity;
+  document.getElementById("f-min").value = p.minStock;
+  document.getElementById("modal-form").classList.add("open");
+}
+
+function saveProduct() {
+  const name = document.getElementById("f-name").value.trim();
+  const category = document.getElementById("f-cat").value;
+  const price = parseFloat(document.getElementById("f-price").value);
+  const quantity = parseInt(document.getElementById("f-qty").value);
+  const minStock = parseInt(document.getElementById("f-min").value) || 0;
+  if (!name || !price || isNaN(quantity)) return;
+  if (editingId === null) {
+    products.push({ id: nextId++, name, category, price, quantity, minStock });
+    showToast("تمت إضافة المنتج بنجاح ✓");
+  } else {
+    products = products.map(p => p.id === editingId ? { ...p, name, category, price, quantity, minStock } : p);
+    showToast("تم تعديل المنتج بنجاح ✓");
+  }
+  save();
+  closeModal("modal-form");
+  render();
+}
+
+function removeProduct(id) {
+  if (!confirm("هل تريد حذف هذا المنتج؟")) return;
+  products = products.filter(p => p.id !== id);
+  save(); render();
+  showToast("تم حذف المنتج", "error");
+}
+
+function openOut(id) {
+  outProduct = products.find(p => p.id === id);
+  document.getElementById("out-name").textContent = outProduct.name;
+  document.getElementById("out-avail").textContent = outProduct.quantity + " وحدة";
+  document.getElementById("out-price").textContent = fmt(outProduct.price);
+  document.getElementById("out-qty").value = 1;
+  document.getElementById("out-qty").max = outProduct.quantity;
+  document.getElementById("out-total-box").style.display = "none";
+  document.getElementById("out-error").style.display = "none";
+  updateOutTotal();
+  document.getElementById("modal-out").classList.add("open");
+}
+
+function updateOutTotal() {
+  if (!outProduct) return;
+  const qty = parseInt(document.getElementById("out-qty").value);
+  const totalBox = document.getElementById("out-total-box");
+  const errBox = document.getElementById("out-error");
+  const btn = document.getElementById("btn-confirm-out");
+  if (qty > 0 && qty <= outProduct.quantity) {
+    totalBox.style.display = "block";
+    document.getElementById("out-total").textContent = fmt(outProduct.price * qty);
+    errBox.style.display = "none";
+    btn.disabled = false;
+  } else if (qty > outProduct.quantity) {
+    totalBox.style.display = "none";
+    errBox.style.display = "block";
+    btn.disabled = true;
+  } else {
+    totalBox.style.display = "none";
+    errBox.style.display = "none";
+    btn.disabled = true;
+  }
+}
+
+function confirmOut() {
+  const qty = parseInt(document.getElementById("out-qty").value);
+  if (!qty || qty < 1 || qty > outProduct.quantity) return;
+  products = products.map(p => p.id === outProduct.id ? { ...p, quantity: p.quantity - qty } : p);
+  save(); render();
+  showToast(`تم صرف ${qty} وحدة من "${outProduct.name}" ✓`);
+  closeModal("modal-out");
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove("open");
+}
+
+function showToast(msg, type = "success") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast show" + (type === "error" ? " error" : "");
+  setTimeout(() => t.className = "toast", 2800);
+}
+
+// Close modal on overlay click
+document.querySelectorAll(".overlay").forEach(el => {
+  el.addEventListener("click", e => { if (e.target === el) el.classList.remove("open"); });
+});
+
+render();
+</script>
+</body>
+</html>
