@@ -87,6 +87,19 @@
   .conn-dot { width:7px; height:7px; border-radius:50%; background:#fbbf24; }
   .conn-dot.ok { background:#22c55e; }
   .conn-dot.err { background:#ef4444; }
+
+  /* Product image */
+  .card-top-info { display:flex; gap:10px; align-items:flex-start; }
+  .card-img { width:54px; height:54px; border-radius:10px; object-fit:cover; background:#f1f5f9; flex-shrink:0; }
+  .card-img-placeholder { width:54px; height:54px; border-radius:10px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+
+  .img-upload-box { display:flex; align-items:center; gap:12px; }
+  .img-preview { width:70px; height:70px; border-radius:12px; object-fit:cover; background:#f1f5f9; border:1.5px dashed #cbd5e1; }
+  .img-preview-placeholder { width:70px; height:70px; border-radius:12px; background:#f1f5f9; border:1.5px dashed #cbd5e1; display:flex; align-items:center; justify-content:center; font-size:24px; color:#94a3b8; }
+  .img-upload-actions { display:flex; flex-direction:column; gap:6px; }
+  .btn-upload { background:#eff6ff; color:#1e40af; border:none; border-radius:8px; padding:8px 14px; font-weight:600; font-size:13px; cursor:pointer; font-family:inherit; }
+  .btn-remove-img { background:#fee2e2; color:#ef4444; border:none; border-radius:8px; padding:8px 14px; font-weight:600; font-size:13px; cursor:pointer; font-family:inherit; }
+  .hidden-file-input { display:none; }
 </style>
 </head>
 <body>
@@ -151,6 +164,17 @@
     <div class="field">
       <label>اسم المنتج *</label>
       <input type="text" id="f-name" placeholder="مثال: قهوة عربية">
+    </div>
+    <div class="field">
+      <label>صورة المنتج</label>
+      <div class="img-upload-box">
+        <div id="img-preview-wrap"></div>
+        <div class="img-upload-actions">
+          <button type="button" class="btn-upload" onclick="document.getElementById('f-image-input').click()">📷 اختر صورة</button>
+          <button type="button" class="btn-remove-img" id="btn-remove-img" onclick="removeImage()" style="display:none">🗑️ إزالة الصورة</button>
+        </div>
+        <input type="file" id="f-image-input" class="hidden-file-input" accept="image/*" onchange="handleImageSelect(event)">
+      </div>
     </div>
     <div class="field">
       <label>الفئة</label>
@@ -240,6 +264,7 @@ let nextId = 4;
 let editingId = null;
 let outProduct = null;
 let dataLoaded = false;
+let currentImage = null;
 
 function setConn(state, text) {
   const dot = document.getElementById("conn-dot");
@@ -287,6 +312,69 @@ async function save() {
 
 function fmt(n) { return "₪" + Number(n).toLocaleString("en"); }
 
+function renderImagePreview() {
+  const wrap = document.getElementById("img-preview-wrap");
+  const removeBtn = document.getElementById("btn-remove-img");
+  if (currentImage) {
+    wrap.innerHTML = `<img class="img-preview" src="${currentImage}">`;
+    removeBtn.style.display = "inline-block";
+  } else {
+    wrap.innerHTML = `<div class="img-preview-placeholder">📦</div>`;
+    removeBtn.style.display = "none";
+  }
+}
+
+function removeImage() {
+  currentImage = null;
+  document.getElementById("f-image-input").value = "";
+  renderImagePreview();
+}
+
+// نقلّص الصورة وندنّي جودتها قبل تخزينها داخل Firestore (حدّ المستند 1MB)
+function compressImage(file, maxSize = 480, quality = 0.6) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxSize) {
+          height = Math.round(height * (maxSize / width));
+          width = maxSize;
+        } else if (height >= width && height > maxSize) {
+          width = Math.round(width * (maxSize / height));
+          height = maxSize;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleImageSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    showToast("الملف المختار ليس صورة ✗", "error");
+    return;
+  }
+  try {
+    currentImage = await compressImage(file);
+    renderImagePreview();
+  } catch (e) {
+    console.error(e);
+    showToast("فشل تحميل الصورة ✗", "error");
+  }
+}
+
 function stockStatus(p) {
   if (p.quantity === 0) return { label: "نفد", color: "#ef4444", bg: "#fee2e2" };
   if (p.quantity <= p.minStock) return { label: "منخفض", color: "#f59e0b", bg: "#fef3c7" };
@@ -318,9 +406,12 @@ function render() {
       return `
       <div class="product-card">
         <div class="card-top">
-          <div>
-            <div class="card-name">${p.name}</div>
-            <div class="card-cat">${p.category}</div>
+          <div class="card-top-info">
+            ${p.image ? `<img class="card-img" src="${p.image}">` : `<div class="card-img-placeholder">📦</div>`}
+            <div>
+              <div class="card-name">${p.name}</div>
+              <div class="card-cat">${p.category}</div>
+            </div>
           </div>
           <span class="badge" style="background:${st.bg};color:${st.color}">${st.label}</span>
         </div>
@@ -361,6 +452,7 @@ function render() {
 
 function openAdd() {
   editingId = null;
+  currentImage = null;
   document.getElementById("modal-title").textContent = "➕ إضافة منتج جديد";
   document.getElementById("btn-save").textContent = "إضافة";
   document.getElementById("f-name").value = "";
@@ -368,12 +460,15 @@ function openAdd() {
   document.getElementById("f-price").value = "";
   document.getElementById("f-qty").value = "";
   document.getElementById("f-min").value = "";
+  document.getElementById("f-image-input").value = "";
+  renderImagePreview();
   document.getElementById("modal-form").classList.add("open");
 }
 
 function openEdit(id) {
   const p = products.find(x => x.id === id);
   editingId = id;
+  currentImage = p.image || null;
   document.getElementById("modal-title").textContent = "✏️ تعديل المنتج";
   document.getElementById("btn-save").textContent = "حفظ التعديلات";
   document.getElementById("f-name").value = p.name;
@@ -381,6 +476,8 @@ function openEdit(id) {
   document.getElementById("f-price").value = p.price;
   document.getElementById("f-qty").value = p.quantity;
   document.getElementById("f-min").value = p.minStock;
+  document.getElementById("f-image-input").value = "";
+  renderImagePreview();
   document.getElementById("modal-form").classList.add("open");
 }
 
@@ -392,10 +489,10 @@ function saveProduct() {
   const minStock = parseInt(document.getElementById("f-min").value) || 0;
   if (!name || !price || isNaN(quantity)) return;
   if (editingId === null) {
-    products.push({ id: nextId++, name, category, price, quantity, minStock });
+    products.push({ id: nextId++, name, category, price, quantity, minStock, image: currentImage });
     showToast("تمت إضافة المنتج بنجاح ✓");
   } else {
-    products = products.map(p => p.id === editingId ? { ...p, name, category, price, quantity, minStock } : p);
+    products = products.map(p => p.id === editingId ? { ...p, name, category, price, quantity, minStock, image: currentImage } : p);
     showToast("تم تعديل المنتج بنجاح ✓");
   }
   save();
