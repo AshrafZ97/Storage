@@ -24,7 +24,7 @@
   .stat-card.clickable { cursor: pointer; transition: transform .12s ease, background .12s ease; }
   .stat-card.clickable:active { transform: scale(0.97); }
   .stat-card.profit { background: rgba(16,185,129,0.22); border-color: rgba(16,185,129,0.5); }
-  .stat-card.history { background: rgba(255,255,255,0.15); }
+  .stat-card.active-filter { outline: 3px solid #fff; }
   .stat-icon { font-size: 18px; }
   .stat-val { font-size: 20px; font-weight: 800; margin: 4px 0 2px; }
   .stat-label { font-size: 12px; opacity: 0.85; }
@@ -183,12 +183,12 @@
       <div class="stat-val" id="s-history-count">0</div>
       <div class="stat-label">سجل الأرباح (History)</div>
     </div>
-    <div class="stat-card" id="stat-low">
+    <div class="stat-card clickable" id="stat-low" onclick="toggleFilter('low')">
       <div class="stat-icon">⚠️</div>
       <div class="stat-val" id="s-low">0</div>
       <div class="stat-label">مخزون منخفض</div>
     </div>
-    <div class="stat-card" id="stat-out">
+    <div class="stat-card clickable" id="stat-out" onclick="toggleFilter('out')">
       <div class="stat-icon">🚫</div>
       <div class="stat-val" id="s-out">0</div>
       <div class="stat-label">نفد من المخزن</div>
@@ -201,12 +201,18 @@
   <input type="text" id="search" placeholder="🔍 ابحث عن منتج..." oninput="render()">
   <select id="filterCat" onchange="render()">
     <option value="الكل">الكل</option>
-    <option>مشروبات</option>
+    <option>شوكلاتة</option>
     <option>مواد غذائية</option>
     <option>منظفات</option>
     <option>إلكترونيات</option>
     <option>أخرى</option>
   </select>
+</div>
+
+<!-- Active Filter Banner -->
+<div id="filter-banner" style="display:none; margin: 0 16px 10px; background:#1e40af; color:#fff; border-radius:10px; padding:10px 14px; display:none; align-items:center; justify-content:space-between; font-size:14px; font-weight:600;">
+  <span id="filter-banner-text"></span>
+  <button onclick="toggleFilter(null)" style="background:rgba(255,255,255,0.25); border:none; color:#fff; border-radius:8px; padding:4px 10px; font-size:13px; cursor:pointer; font-family:inherit;">✕ إلغاء الفلتر</button>
 </div>
 
 <!-- Products -->
@@ -235,8 +241,9 @@
       <label>الفئة</label>
       <select id="f-cat">
         <option>شوكلاتة</option>
-        <option>مشروبات</option>
+        <option>مواد غذائية</option>
         <option>منظفات</option>
+        <option>إلكترونيات</option>
         <option>أخرى</option>
       </select>
     </div>
@@ -385,6 +392,7 @@ let cart = []; // [{ id, qty }]
 let pendingProduct = null;
 let dataLoaded = false;
 let currentImage = null;
+let activeFilter = null; // 'low' | 'out' | null
 
 // الربح الصافي المتراكم منذ آخر إرسال إلى السجل
 let pendingProfit = { revenue: 0, cost: 0 };
@@ -510,6 +518,11 @@ function stockStatus(p) {
   return { label: "متوفر", color: "#10b981", bg: "#d1fae5" };
 }
 
+function toggleFilter(type) {
+  activeFilter = activeFilter === type ? null : type;
+  render();
+}
+
 function render() {
   const list = document.getElementById("products-list");
 
@@ -524,7 +537,10 @@ function render() {
   const filtered = products.filter(p => {
     const ms = p.name.includes(search) || p.category.includes(search);
     const mc = cat === "الكل" || p.category === cat;
-    return ms && mc;
+    let mf = true;
+    if (activeFilter === 'low') mf = p.quantity > 0 && p.quantity <= p.minStock;
+    if (activeFilter === 'out') mf = p.quantity === 0;
+    return ms && mc && mf;
   });
 
   if (filtered.length === 0) {
@@ -575,8 +591,21 @@ function render() {
   document.getElementById("s-value").textContent = fmt(totalVal);
   document.getElementById("s-low").textContent = low;
   document.getElementById("s-out").textContent = out;
-  document.getElementById("stat-low").className = "stat-card" + (low > 0 ? " warn" : "");
-  document.getElementById("stat-out").className = "stat-card" + (out > 0 ? " warn" : "");
+  document.getElementById("stat-low").className = "stat-card clickable" + (low > 0 ? " warn" : "") + (activeFilter === 'low' ? " active-filter" : "");
+  document.getElementById("stat-out").className = "stat-card clickable" + (out > 0 ? " warn" : "") + (activeFilter === 'out' ? " active-filter" : "");
+
+  // Filter banner
+  const banner = document.getElementById("filter-banner");
+  const bannerText = document.getElementById("filter-banner-text");
+  if (activeFilter === 'low') {
+    banner.style.display = "flex";
+    bannerText.textContent = `⚠️ عرض المنتجات ذات المخزون المنخفض (${low} منتج)`;
+  } else if (activeFilter === 'out') {
+    banner.style.display = "flex";
+    bannerText.textContent = `🚫 عرض المنتجات التي نفد مخزونها (${out} منتج)`;
+  } else {
+    banner.style.display = "none";
+  }
 
   renderProfitStat();
 }
@@ -593,7 +622,7 @@ function openAdd() {
   document.getElementById("modal-title").textContent = "➕ إضافة منتج جديد";
   document.getElementById("btn-save").textContent = "إضافة";
   document.getElementById("f-name").value = "";
-  document.getElementById("f-cat").value = "مشروبات";
+  document.getElementById("f-cat").value = "شوكلاتة";
   document.getElementById("f-cost").value = "";
   document.getElementById("f-price").value = "";
   document.getElementById("f-qty").value = "";
@@ -627,7 +656,7 @@ function saveProduct() {
   const price = parseFloat(document.getElementById("f-price").value);
   const quantity = parseInt(document.getElementById("f-qty").value);
   const minStock = parseInt(document.getElementById("f-min").value) || 0;
-  if (!name || !price || isNaN(quantity)) return;
+  if (!name || !price || isNaN(quantity) || quantity < 0) return;
   if (editingId === null) {
     products.push({ id: nextId++, name, category, price, cost, quantity, minStock, image: currentImage });
     showToast("تمت إضافة المنتج بنجاح ✓");
